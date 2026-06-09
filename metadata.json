@@ -1,0 +1,6 @@
+{
+  "name": "RS Downloader Pro",
+  "description": "Una aplicación web de alto rendimiento inspirada en 4K Video Downloader llamada RS Downloader Pro para descargar videos y audios de cualquier red social de forma directa, sin logins.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
