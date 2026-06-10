@@ -27,7 +27,7 @@ export default function WindowsTitleBar({
         <div className="w-5 h-5 rounded bg-lime-500 flex items-center justify-center text-neutral-950 text-[10px] font-black tracking-tighter">
           RS
         </div>
-        <span className="text-xs font-semibold font-mono tracking-wider text-neutral-700 dark:text-neutral-300">RS Downloader Pro v1.2.8</span>
+        <span className="text-xs font-semibold font-mono tracking-wider text-neutral-700 dark:text-neutral-300">RS Downloader Pro v1.2.9</span>
       </div>
       <div className="flex items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
         {/* Action buttons embedded in title bar */}

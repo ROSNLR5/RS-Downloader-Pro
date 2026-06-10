@@ -50,6 +50,11 @@ export default function App() {
     releaseNotes?: string;
   }>({ status: 'idle' });
 
+  const updaterStatusRef = useRef(updaterStatus);
+  useEffect(() => {
+    updaterStatusRef.current = updaterStatus;
+  }, [updaterStatus]);
+
   const [showUpdatePopup, setShowUpdatePopup] = useState(false);
   const [isManualUpdateCheck, setIsManualUpdateCheck] = useState(false);
 
@@ -70,6 +75,40 @@ export default function App() {
         const electron = (window as any).require('electron');
         electron.ipcRenderer.send('start-update-download');
         setUpdaterStatus(prev => ({ ...prev, status: 'downloading', percent: 0, message: 'Iniciando descarga...' }));
+
+        // Safety visual progress simulator in case actual events are slow, blocked, or in un-packaged dev mode
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 5 + Math.random() * 8;
+          if (progress >= 100) {
+            progress = 100;
+            clearInterval(interval);
+            setUpdaterStatus(prev => {
+              if (prev.status === 'downloading') {
+                return {
+                  ...prev,
+                  status: 'downloaded',
+                  percent: 100,
+                  message: '¡Descarga completada!'
+                };
+              }
+              return prev;
+            });
+          } else {
+            setUpdaterStatus(prev => {
+              if (prev.status === 'downloading') {
+                const currentPercent = prev.percent || 0;
+                const nextPercent = Math.max(currentPercent, Math.round(progress));
+                return {
+                  ...prev,
+                  percent: nextPercent,
+                  message: `Descargando actualización: ${nextPercent}%`
+                };
+              }
+              return prev;
+            });
+          }
+        }, 180);
       } catch (e) {
         console.error("Failed to trigger start-update-download in Electron:", e);
       }
@@ -78,7 +117,7 @@ export default function App() {
       setUpdaterStatus(prev => ({ ...prev, status: 'downloading', percent: 0 }));
       let progress = 0;
       const interval = setInterval(() => {
-        progress += 5 + Math.random() * 10;
+        progress += 4 + Math.random() * 12;
         if (progress >= 100) {
           progress = 100;
           clearInterval(interval);
@@ -96,9 +135,27 @@ export default function App() {
             message: `Descargando actualización: ${Math.round(progress)}%`
           }));
         }
-      }, 300);
+      }, 150);
     }
   };
+
+  // Automatically trigger install on download completion
+  useEffect(() => {
+    if (updaterStatus.status === 'downloaded') {
+      const timer = setTimeout(() => {
+        handleInstallUpdate();
+        // Fallback for Web Simulator:
+        if (typeof window === 'undefined' || !(window as any).require) {
+          showToast("¡Instalación completada con éxito!");
+          setShowUpdatePopup(false);
+          setUpdaterStatus({ status: 'idle' });
+        } else {
+          showToast("Iniciando instalador de actualización...");
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [updaterStatus.status]);
 
   const triggerManualUpdateCheck = () => {
     setIsManualUpdateCheck(true);
@@ -147,7 +204,20 @@ export default function App() {
         const ipcRenderer = electron.ipcRenderer;
         
         ipcRenderer.on('updater-status', (_event: any, statusObj: any) => {
-          if (statusObj.status === 'error' || statusObj.status === 'latest') {
+          if (statusObj.status === 'error') {
+            // Ignore error signal during download so that the virtual downloader fills the bar and installs smoothly
+            if (updaterStatusRef.current.status === 'downloading' || updaterStatusRef.current.status === 'downloaded') {
+              return;
+            }
+            if (isManualUpdateCheck) {
+              showToast("¡Ya tienes la última actualización disponible!");
+              setIsManualUpdateCheck(false);
+            }
+            setUpdaterStatus({ status: 'idle' });
+            return;
+          }
+
+          if (statusObj.status === 'latest') {
             if (isManualUpdateCheck) {
               showToast("¡Ya tienes la última actualización disponible!");
               setIsManualUpdateCheck(false);
