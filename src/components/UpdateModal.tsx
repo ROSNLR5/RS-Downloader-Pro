@@ -92,7 +92,7 @@ export default function UpdateModal({
             </div>
             <div className="text-right space-y-0.5">
               <span className="text-[10px] font-bold font-mono text-neutral-400 uppercase tracking-widest">Tu Versión</span>
-              <h3 className="text-sm font-bold text-neutral-400 tracking-tight">v1.2.9</h3>
+              <h3 className="text-sm font-bold text-neutral-400 tracking-tight">v1.2.91</h3>
             </div>
           </div>
 
