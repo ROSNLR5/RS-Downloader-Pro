@@ -1,9 +1,12 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import pkgUpdater from 'electron-updater';
 const { autoUpdater } = pkgUpdater;
+import fs from 'fs';
+import https from 'https';
+import os from 'os';
 
 // Recreate __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -13,6 +16,174 @@ const require = createRequire(import.meta.url);
 import { spawn } from 'child_process';
 
 let serverProcess;
+let downloadedInstallerPath = '';
+
+// Helper to follow redirecting https requests and download the file
+function downloadFileWithProgress(url, dest, onProgress, onSuccess, onError) {
+  // Ensure target folder exists
+  const dir = path.dirname(dest);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Clear stale setup file to prevent installation lockups
+  if (fs.existsSync(dest)) {
+    try {
+      fs.unlinkSync(dest);
+    } catch (e) {}
+  }
+
+  const file = fs.createWriteStream(dest);
+
+  const request = https.get(url, {
+    headers: { 'User-Agent': 'RS-Downloader-Pro-Updater' }
+  }, (response) => {
+    // Handle redirect
+    if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+      file.close();
+      fs.unlink(dest, () => {
+        downloadFileWithProgress(response.headers.location, dest, onProgress, onSuccess, onError);
+      });
+      return;
+    }
+
+    if (response.statusCode !== 200) {
+      file.close();
+      fs.unlink(dest, () => {
+        onError(new Error(`Server response: HTTP ${response.statusCode}`));
+      });
+      return;
+    }
+
+    const len = parseInt(response.headers['content-length'] || '0', 10);
+    let downloaded = 0;
+
+    response.on('data', (chunk) => {
+      file.write(chunk);
+      downloaded += chunk.length;
+      if (len > 0) {
+        const percent = (downloaded / len) * 100;
+        onProgress(percent);
+      }
+    });
+
+    response.on('end', () => {
+      file.end(() => {
+        onSuccess(dest);
+      });
+    });
+
+    response.on('error', (err) => {
+      file.close();
+      fs.unlink(dest, () => {
+        onError(err);
+      });
+    });
+  });
+
+  request.on('error', (err) => {
+    file.close();
+    fs.unlink(dest, () => {
+      onError(err);
+    });
+  });
+}
+
+function startCustomDownload(mainWindow, targetVersion = '1.3.0') {
+  mainWindow.webContents.send('updater-status', { 
+    status: 'checking', 
+    message: 'Buscando actualizador en GitHub Releases...' 
+  });
+
+  const owner = 'ROSNLR5';
+  const repo = 'RS-Downloader-Pro';
+  const url = `https://api.github.com/repos/${owner}/${repo}/releases/latest`;
+
+  const request = https.get(url, {
+    headers: { 'User-Agent': 'RS-Downloader-Pro-Updater' }
+  }, (response) => {
+    let rawData = '';
+
+    response.on('data', (chunk) => { rawData += chunk; });
+    response.on('end', () => {
+      try {
+        let downloadUrl = '';
+        let fileName = '';
+        let versionTag = `v${targetVersion}`;
+
+        if (response.statusCode === 200) {
+          const release = JSON.parse(rawData);
+          versionTag = release.tag_name || `v${targetVersion}`;
+          // Set real targetVersion from parsed GitHub tag dynamically
+          targetVersion = versionTag.replace(/^v/, '');
+
+          // Find an asset ending with .exe
+          const exeAsset = release.assets && release.assets.find(a => a.name.endsWith('.exe'));
+          if (exeAsset) {
+            downloadUrl = exeAsset.browser_download_url;
+            fileName = exeAsset.name;
+          }
+        }
+
+        // Fallback constructor if GitHub API was rate limited, has private assets, or received error
+        if (!downloadUrl) {
+          fileName = `RS-Downloader-Pro-Setup.exe`;
+          downloadUrl = `https://github.com/ROSNLR5/RS-Downloader-Pro/releases/download/${versionTag}/${fileName}`;
+        }
+
+        const tempDest = path.join(os.tmpdir(), fileName);
+
+        mainWindow.webContents.send('updater-status', { 
+          status: 'downloading', 
+          percent: 0, 
+          version: targetVersion,
+          message: `Iniciando descarga de v${targetVersion}...` 
+        });
+
+        downloadFileWithProgress(
+          downloadUrl,
+          tempDest,
+          (percent) => {
+            mainWindow.webContents.send('updater-status', { 
+              status: 'downloading', 
+              percent: percent, 
+              version: targetVersion,
+              message: `Descargando v${targetVersion}: ${Math.round(percent)}%` 
+            });
+          },
+          (savedPath) => {
+            downloadedInstallerPath = savedPath;
+            mainWindow.webContents.send('updater-status', { 
+              status: 'downloaded', 
+              version: targetVersion,
+              message: `¡Descarga de v${targetVersion} completa!` 
+            });
+          },
+          (err) => {
+            console.error("Custom download error: ", err);
+            mainWindow.webContents.send('updater-status', { 
+              status: 'error', 
+              message: `Error al descargar: ${err.message}. Asegúrate de tener conexión a Internet.` 
+            });
+          }
+        );
+
+      } catch (parseErr) {
+        mainWindow.webContents.send('updater-status', { 
+          status: 'error', 
+          message: 'Error al analizar metadatos.' 
+        });
+      }
+    });
+  });
+
+  request.on('error', (err) => {
+    mainWindow.webContents.send('updater-status', { 
+      status: 'error', 
+      message: `Error de conexión: ${err.message}` 
+    });
+  });
+}
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
@@ -123,7 +294,18 @@ app.whenReady().then(() => {
   });
 
   ipcMain.on('install-update', () => {
-    autoUpdater.quitAndInstall();
+    if (downloadedInstallerPath && fs.existsSync(downloadedInstallerPath)) {
+      // Execute the genuine downloaded installer file
+      shell.openPath(downloadedInstallerPath).then(() => {
+        // Safe exit parent process so the file-locks are cleaned up for the setup installer to run flawlessly
+        app.quit();
+      }).catch(err => {
+        console.error("Failed to execute local setup installer:", err);
+        autoUpdater.quitAndInstall(); // fallback to standard auto-package installer
+      });
+    } else {
+      autoUpdater.quitAndInstall();
+    }
   });
 
   ipcMain.on('check-for-updates-manual', () => {
@@ -132,10 +314,21 @@ app.whenReady().then(() => {
     });
   });
 
-  ipcMain.on('start-update-download', () => {
-    autoUpdater.downloadUpdate().catch(err => {
-      console.error("Starting update download failure:", err);
-    });
+  ipcMain.on('start-update-download', (event) => {
+    const mainWindow = BrowserWindow.fromWebContents(event.sender);
+    if (mainWindow) {
+      // Initiate a REAL binary download stream from GitHub Releases
+      startCustomDownload(mainWindow);
+    } else {
+      // Fallback
+      autoUpdater.downloadUpdate().catch(err => {
+        console.error("Starting update download failure:", err);
+      });
+    }
+  });
+
+  ipcMain.on('get-app-version', (event) => {
+    event.returnValue = app.getVersion();
   });
 
   app.on('activate', function () {

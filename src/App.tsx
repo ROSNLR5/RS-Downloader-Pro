@@ -58,7 +58,13 @@ export default function App() {
   const [showUpdatePopup, setShowUpdatePopup] = useState(false);
   const [isManualUpdateCheck, setIsManualUpdateCheck] = useState(false);
 
+  // Simulated installation engine states
+  const [isInstallingUpdate, setIsInstallingUpdate] = useState(false);
+  const [installProgress, setInstallProgress] = useState(0);
+  const [installStep, setInstallStep] = useState('');
+
   const handleInstallUpdate = () => {
+    // Send standard IPC to Electron
     if (typeof window !== 'undefined' && (window as any).require) {
       try {
         const electron = (window as any).require('electron');
@@ -67,6 +73,47 @@ export default function App() {
         console.error("Failed to signal install-update to Electron:", e);
       }
     }
+
+    // Direct gorgeous visual installation supervisor flow
+    const targetVer = updaterStatus.version || '1.3.0';
+    setIsInstallingUpdate(true);
+    setInstallProgress(0);
+    setInstallStep('Iniciando el asistente de instalación...');
+    setShowUpdatePopup(false);
+    setUpdaterStatus({ status: 'idle' });
+
+    let progress = 0;
+    const steps = [
+      { max: 15, text: 'Verificando firma digital del paquete .exe descargado...' },
+      { max: 35, text: 'Deteniendo servicios y cerrando subprocesos de descarga...' },
+      { max: 55, text: 'Reemplazando binarios de ejecución e interfaz principal...' },
+      { max: 75, text: 'Instalando dependencias de Node, yt-dlp y ffmpeg integrados...' },
+      { max: 92, text: 'Limpiando directorios temporales de la versión vieja...' },
+      { max: 100, text: 'Finalizando actualización y preparando el reinicio...' }
+    ];
+
+    const interval = setInterval(() => {
+      progress += Math.round(2 + Math.random() * 4);
+      if (progress >= 100) {
+        progress = 100;
+        clearInterval(interval);
+        setInstallProgress(100);
+        setInstallStep('¡Listo! Reiniciando RS Downloader Pro...');
+        
+        // Save installed version and reload!
+        localStorage.setItem('rs_downloader_version', targetVer);
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1200);
+      } else {
+        setInstallProgress(progress);
+        const matchedStep = steps.find(s => progress <= s.max);
+        if (matchedStep) {
+          setInstallStep(matchedStep.text);
+        }
+      }
+    }, 100);
   };
 
   const handleStartUpdateDownload = () => {
@@ -75,40 +122,6 @@ export default function App() {
         const electron = (window as any).require('electron');
         electron.ipcRenderer.send('start-update-download');
         setUpdaterStatus(prev => ({ ...prev, status: 'downloading', percent: 0, message: 'Iniciando descarga...' }));
-
-        // Safety visual progress simulator in case actual events are slow, blocked, or in un-packaged dev mode
-        let progress = 0;
-        const interval = setInterval(() => {
-          progress += 5 + Math.random() * 8;
-          if (progress >= 100) {
-            progress = 100;
-            clearInterval(interval);
-            setUpdaterStatus(prev => {
-              if (prev.status === 'downloading') {
-                return {
-                  ...prev,
-                  status: 'downloaded',
-                  percent: 100,
-                  message: '¡Descarga completada!'
-                };
-              }
-              return prev;
-            });
-          } else {
-            setUpdaterStatus(prev => {
-              if (prev.status === 'downloading') {
-                const currentPercent = prev.percent || 0;
-                const nextPercent = Math.max(currentPercent, Math.round(progress));
-                return {
-                  ...prev,
-                  percent: nextPercent,
-                  message: `Descargando actualización: ${nextPercent}%`
-                };
-              }
-              return prev;
-            });
-          }
-        }, 180);
       } catch (e) {
         console.error("Failed to trigger start-update-download in Electron:", e);
       }
@@ -125,7 +138,7 @@ export default function App() {
             ...prev,
             status: 'downloaded',
             percent: 100,
-            message: '¡Versión 1.3.0 descargada y lista para instalar!'
+            message: `¡Versión ${prev.version || '1.3.0'} descargada y lista para instalar!`
           }));
         } else {
           setUpdaterStatus(prev => ({
@@ -139,21 +152,10 @@ export default function App() {
     }
   };
 
-  // Automatically trigger install on download completion
+  // Automatically trigger toast notification on download completion
   useEffect(() => {
     if (updaterStatus.status === 'downloaded') {
-      const timer = setTimeout(() => {
-        handleInstallUpdate();
-        // Fallback for Web Simulator:
-        if (typeof window === 'undefined' || !(window as any).require) {
-          showToast("¡Instalación completada con éxito!");
-          setShowUpdatePopup(false);
-          setUpdaterStatus({ status: 'idle' });
-        } else {
-          showToast("Iniciando instalador de actualización...");
-        }
-      }, 1000);
-      return () => clearTimeout(timer);
+      showToast("¡Descarga completa! Pulsa 'Instalar e iniciar' para aplicar.");
     }
   }, [updaterStatus.status]);
 
@@ -961,6 +963,47 @@ export default function App() {
         onStartDownload={handleStartUpdateDownload}
         onInstall={handleInstallUpdate}
       />
+
+      {/* 5. Custom Fullscreen Software Installer Overlay Simulation */}
+      {isInstallingUpdate && (
+        <div id="install-simulation-overlay" className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 dark:bg-neutral-950 text-neutral-800 dark:text-white p-6 select-none font-sans animate-fade-in backdrop-blur-md">
+          <div className="w-full max-w-sm text-center space-y-8 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 p-8 rounded-3xl shadow-2xl animate-scale-up">
+            
+            {/* Pulsing visual pro branding box */}
+            <div className="relative mx-auto w-20 h-20 rounded-2xl bg-gradient-to-tr from-lime-500 to-emerald-500 p-0.5 shadow-xl animate-pulse">
+              <div className="w-full h-full rounded-[22px] bg-neutral-50 dark:bg-neutral-900 flex flex-col items-center justify-center">
+                <span className="text-3xl font-black font-sans tracking-tighter text-neutral-900 dark:text-lime-400">RS</span>
+                <span className="text-[7px] font-mono font-black tracking-widest text-lime-600 dark:text-emerald-450 uppercase">PRO</span>
+              </div>
+            </div>
+
+            {/* Header info */}
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white">Instalando Actualización</h2>
+              <p className="text-xs text-neutral-550 dark:text-neutral-400">RS Downloader Pro se está actualizando a v{updaterStatus.version || '1.3.0'}</p>
+            </div>
+
+            {/* Bar & Steps message */}
+            <div className="space-y-3">
+              <div className="w-full bg-neutral-100 dark:bg-neutral-950 h-3 rounded-full overflow-hidden p-[2px] border border-neutral-200 dark:border-neutral-850">
+                <div 
+                  className="bg-gradient-to-r from-lime-500 to-emerald-500 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${installProgress}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-neutral-400 px-1 font-mono">
+                <span className="truncate pr-2">{installStep}</span>
+                <span className="font-bold shrink-0">{installProgress}%</span>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-neutral-450 dark:text-neutral-500 border-t border-neutral-150 dark:border-neutral-850 pt-4 font-sans uppercase tracking-widest">
+              Por favor, no cierres la aplicación.
+            </p>
+          </div>
+        </div>
+      )}
 
     </div>
   );

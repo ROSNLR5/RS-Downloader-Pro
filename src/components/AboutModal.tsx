@@ -20,6 +20,7 @@ import {
   DownloadCloud,
   ChevronRight
 } from 'lucide-react';
+import { getAppVersion } from '../utils/version';
 
 interface AboutModalProps {
   isOpen: boolean;
@@ -58,19 +59,20 @@ export default function AboutModal({ isOpen, onClose, onManualUpdateCheck }: Abo
         
         // Simple semantic comparison
         const cleanLatest = latestTag.replace(/[^0-9.]/g, '');
-        const cleanCurrent = '1.2.91';
+        const cleanCurrent = getAppVersion();
         
         if (cleanLatest !== cleanCurrent) {
           setUpdateCheckState('new-version');
-          setCheckMessage(`¡Nueva versión detectada! Versión ${latestTag} disponible en GitHub (actual: v1.2.91).`);
+          setCheckMessage(`¡Nueva versión detectada! Versión ${latestTag} disponible en GitHub (actual: v${cleanCurrent}).`);
         } else {
           setUpdateCheckState('latest');
-          setCheckMessage(`¡Felicidades! La versión local v1.2.91 coincide con la última versión de producción en GitHub.`);
+          setCheckMessage(`¡Felicidades! La versión local v${cleanCurrent} coincide con la última versión de producción en GitHub.`);
         }
       } else {
         // Custom friendly fallback simulation
+        const cleanCurrent = getAppVersion();
         setUpdateCheckState('latest');
-        setCheckMessage(`El repositorio github.com/${repoOwner}/${repoName} es privado o aún no tiene un Release público. (Simulación: v1.2.91 es la versión más reciente).`);
+        setCheckMessage(`El repositorio github.com/${repoOwner}/${repoName} es privado o aún no tiene un Release público. (Simulación: v${cleanCurrent} es la versión más reciente).`);
       }
     } catch (err) {
       setUpdateCheckState('error');
@@ -131,7 +133,7 @@ export default function AboutModal({ isOpen, onClose, onManualUpdateCheck }: Abo
                   RS Downloader Pro
                 </h1>
                 <div className="inline-flex self-center sm:self-auto items-center px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-lime-100 dark:bg-lime-950/60 border border-lime-300 dark:border-lime-800/60 text-lime-700 dark:text-lime-400 uppercase tracking-wider">
-                  Build v1.2.91
+                  Build v{getAppVersion()}
                 </div>
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-450 max-w-md">

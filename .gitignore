@@ -1,4 +1,8 @@
 node_modules/
+build/
+dist/
+dist-electron/
+bin/
 coverage/
 .DS_Store
 *.log
@@ -6,5 +10,7 @@ coverage/
 !.env.example
 out/
 .editorconfig
+*.bin
+*.exe
 
 
