@@ -24,9 +24,10 @@ import {
 interface AboutModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onManualUpdateCheck?: () => void;
 }
 
-export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
+export default function AboutModal({ isOpen, onClose, onManualUpdateCheck }: AboutModalProps) {
   const [activeTab, setActiveTab] = useState<'tech' | 'licencias' | 'github'>('tech');
   
   // State for Github update check simulator & custom repo target
@@ -36,9 +37,16 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
   const [checkMessage, setCheckMessage] = useState('');
 
   const checkGitHubUpdates = async () => {
+    // If we have local updater available, trigger it directly and pivot immediately
+    if (onManualUpdateCheck) {
+      onManualUpdateCheck();
+      onClose(); // close about modal instantly to let the update popup show!
+      return;
+    }
+
     setUpdateCheckState('checking');
     setCheckMessage('Consultando API de GitHub Releases...');
-    
+
     try {
       // Artificial delay to make loading look pleasant
       await new Promise(r => setTimeout(r, 1200));
@@ -50,19 +58,19 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
         
         // Simple semantic comparison
         const cleanLatest = latestTag.replace(/[^0-9.]/g, '');
-        const cleanCurrent = '1.2.5';
+        const cleanCurrent = '1.2.8';
         
         if (cleanLatest !== cleanCurrent) {
           setUpdateCheckState('new-version');
-          setCheckMessage(`¡Nueva versión detectada! Versión ${latestTag} disponible en GitHub (actual: v1.2.5).`);
+          setCheckMessage(`¡Nueva versión detectada! Versión ${latestTag} disponible en GitHub (actual: v1.2.8).`);
         } else {
           setUpdateCheckState('latest');
-          setCheckMessage(`¡Felicidades! La versión local v1.2.5 coincide con la última versión de producción en GitHub.`);
+          setCheckMessage(`¡Felicidades! La versión local v1.2.8 coincide con la última versión de producción en GitHub.`);
         }
       } else {
         // Custom friendly fallback simulation
         setUpdateCheckState('latest');
-        setCheckMessage(`El repositorio github.com/${repoOwner}/${repoName} es privado o aún no tiene un Release público. (Simulación: v1.2.5 es la versión más reciente).`);
+        setCheckMessage(`El repositorio github.com/${repoOwner}/${repoName} es privado o aún no tiene un Release público. (Simulación: v1.2.8 es la versión más reciente).`);
       }
     } catch (err) {
       setUpdateCheckState('error');
@@ -123,7 +131,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
                   RS Downloader Pro
                 </h1>
                 <div className="inline-flex self-center sm:self-auto items-center px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-lime-100 dark:bg-lime-950/60 border border-lime-300 dark:border-lime-800/60 text-lime-700 dark:text-lime-400 uppercase tracking-wider">
-                  Build v1.2.5
+                  Build v1.2.8
                 </div>
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-450 max-w-md">
@@ -382,7 +390,7 @@ export default function AboutModal({ isOpen, onClose }: AboutModalProps) {
                         disabled={updateCheckState === 'checking' || !repoOwner || !repoName}
                         className="px-4 py-1.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider bg-neutral-900 dark:bg-neutral-100 hover:bg-lime-550 dark:hover:bg-lime-450 hover:text-black hover:scale-[1.01] active:scale-[0.98] transition-all text-white dark:text-neutral-950 flex items-center gap-1 cursor-pointer disabled:opacity-50 disabled:pointer-events-none"
                       >
-                        {updateCheckState === 'checking' ? 'Consultando...' : 'Verificar en GitHub'}
+                        {updateCheckState === 'checking' ? 'Consultando...' : 'Verificar Actualización'}
                         <ChevronRight className="w-3 h-3" />
                       </button>
                     </div>

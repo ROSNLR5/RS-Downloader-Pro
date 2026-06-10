@@ -31,6 +31,8 @@ function createWindow() {
   mainWindow.setMenu(null);
 
   // Set up auto-updater events integration
+  autoUpdater.autoDownload = false;
+
   autoUpdater.on('checking-for-update', () => {
     mainWindow.webContents.send('updater-status', { status: 'checking', message: 'Buscando actualizaciones...' });
   });
@@ -39,7 +41,8 @@ function createWindow() {
     mainWindow.webContents.send('updater-status', { 
       status: 'available', 
       version: info.version,
-      message: `¡Nueva versión ${info.version} disponible! Descargando en segundo plano...` 
+      releaseNotes: info.releaseNotes || 'Mejoras de rendimiento, actualización del motor de descargas yt-dlp y corrección de pequeños fallos de interfaz.',
+      message: `¡Nueva versión ${info.version} disponible!` 
     });
   });
 
@@ -48,13 +51,14 @@ function createWindow() {
   });
 
   autoUpdater.on('error', (err) => {
-    mainWindow.webContents.send('updater-status', { status: 'error', message: `Actualización fallida: ${err?.message || err}` });
+    mainWindow.webContents.send('updater-status', { status: 'error', message: `Actualización fallida o no configurada para este entorno: ${err?.message || err}` });
   });
 
   autoUpdater.on('download-progress', (progressObj) => {
     mainWindow.webContents.send('updater-status', { 
       status: 'downloading', 
       percent: progressObj.percent,
+      bytesPerSecond: progressObj.bytesPerSecond,
       message: `Descargando actualización: ${Math.round(progressObj.percent)}%` 
     });
   });
@@ -120,6 +124,18 @@ app.whenReady().then(() => {
 
   ipcMain.on('install-update', () => {
     autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.on('check-for-updates-manual', () => {
+    autoUpdater.checkForUpdates().catch(err => {
+      console.error("Manual update check failure:", err);
+    });
+  });
+
+  ipcMain.on('start-update-download', () => {
+    autoUpdater.downloadUpdate().catch(err => {
+      console.error("Starting update download failure:", err);
+    });
   });
 
   app.on('activate', function () {

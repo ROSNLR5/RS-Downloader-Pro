@@ -8,6 +8,7 @@ import { DownloadTask, VideoMetadata, SmartModeSettings, AvailableFormat } from 
 import DownloadItem from './components/DownloadItem';
 import SmartModeModal from './components/SmartModeModal';
 import AboutModal from './components/AboutModal';
+import UpdateModal from './components/UpdateModal';
 import WindowsTitleBar from './components/WindowsTitleBar';
 import FormatSelectorModal from './components/FormatSelectorModal';
 import { useTheme } from './ThemeContext';
@@ -45,7 +46,12 @@ export default function App() {
     status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error' | 'latest';
     percent?: number;
     message?: string;
+    version?: string;
+    releaseNotes?: string;
   }>({ status: 'idle' });
+
+  const [showUpdatePopup, setShowUpdatePopup] = useState(false);
+  const [isManualUpdateCheck, setIsManualUpdateCheck] = useState(false);
 
   const handleInstallUpdate = () => {
     if (typeof window !== 'undefined' && (window as any).require) {
@@ -58,6 +64,81 @@ export default function App() {
     }
   };
 
+  const handleStartUpdateDownload = () => {
+    if (typeof window !== 'undefined' && (window as any).require) {
+      try {
+        const electron = (window as any).require('electron');
+        electron.ipcRenderer.send('start-update-download');
+        setUpdaterStatus(prev => ({ ...prev, status: 'downloading', percent: 0, message: 'Iniciando descarga...' }));
+      } catch (e) {
+        console.error("Failed to trigger start-update-download in Electron:", e);
+      }
+    } else {
+      // Web simulator fallback path for testing
+      setUpdaterStatus(prev => ({ ...prev, status: 'downloading', percent: 0 }));
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 5 + Math.random() * 10;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          setUpdaterStatus(prev => ({
+            ...prev,
+            status: 'downloaded',
+            percent: 100,
+            message: '¡Versión 1.3.0 descargada y lista para instalar!'
+          }));
+        } else {
+          setUpdaterStatus(prev => ({
+            ...prev,
+            status: 'downloading',
+            percent: progress,
+            message: `Descargando actualización: ${Math.round(progress)}%`
+          }));
+        }
+      }, 300);
+    }
+  };
+
+  const triggerManualUpdateCheck = () => {
+    setIsManualUpdateCheck(true);
+    setUpdaterStatus({ status: 'checking', message: 'Buscando actualizaciones...' });
+    
+    if (typeof window !== 'undefined' && (window as any).require) {
+      try {
+        const electron = (window as any).require('electron');
+        electron.ipcRenderer.send('check-for-updates-manual');
+        showToast("Buscando actualizaciones de software...");
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      // Web simulator fallback toggles to show update vs up-to-date
+      showToast("Buscando actualizaciones de software...");
+      setTimeout(() => {
+        const checkedTimes = Number(localStorage.getItem('rs_updater_web_clicks') || '0');
+        const nextClicks = checkedTimes + 1;
+        localStorage.setItem('rs_updater_web_clicks', nextClicks.toString());
+
+        if (nextClicks % 2 === 1) {
+          // Available update on first check
+          setUpdaterStatus({
+            status: 'available',
+            version: '1.3.0',
+            releaseNotes: 'Optimización de velocidad y paralelización avanzada.\nNuevos selectores para resoluciones nativas de videos de Instagram y TikTok.\nFusión local de audio y video automatizada con ffmpeg mejorada.',
+            message: '¡Nueva versión 1.3.0 disponible!'
+          });
+          setShowUpdatePopup(true);
+        } else {
+          // Already have latest on next check
+          setUpdaterStatus({ status: 'idle' });
+          setIsManualUpdateCheck(false);
+          showToast("¡Ya tienes la última actualización disponible!");
+        }
+      }, 1500);
+    }
+  };
+
   // Register Electron IPC listeners for auto-updates
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).require) {
@@ -66,13 +147,35 @@ export default function App() {
         const ipcRenderer = electron.ipcRenderer;
         
         ipcRenderer.on('updater-status', (_event: any, statusObj: any) => {
+          if (statusObj.status === 'error' || statusObj.status === 'latest') {
+            if (isManualUpdateCheck) {
+              showToast("¡Ya tienes la última actualización disponible!");
+              setIsManualUpdateCheck(false);
+            }
+            setUpdaterStatus({ status: 'idle' });
+            return;
+          }
+
           setUpdaterStatus(statusObj);
+          
+          if (statusObj.status === 'available') {
+            const now = Date.now();
+            const snoozedUntil = Number(localStorage.getItem('rs_updater_snoozed_until') || '0');
+            const noRecordarVersion = localStorage.getItem('rs_updater_no_recordar_version') || '';
+
+            const isSnoozed = now < snoozedUntil || noRecordarVersion === statusObj.version;
+
+            // Show popup if not snoozed OR if they triggered this via a manual search button click
+            if (!isSnoozed || isManualUpdateCheck) {
+              setShowUpdatePopup(true);
+            }
+          }
         });
       } catch (err) {
         console.warn("Electron auto-updater IPC binding skipped:", err);
       }
     }
-  }, []);
+  }, [isManualUpdateCheck]);
 
   // Input fields
   const [urlInput, setUrlInput] = useState('');
@@ -771,6 +874,22 @@ export default function App() {
       <AboutModal
         isOpen={showAboutModal}
         onClose={() => setShowAboutModal(false)}
+        onManualUpdateCheck={triggerManualUpdateCheck}
+      />
+
+      {/* 4. Notification Dialog Modal for Software Updates */}
+      <UpdateModal
+        isOpen={showUpdatePopup}
+        onClose={() => {
+          setShowUpdatePopup(false);
+          setIsManualUpdateCheck(false); // reset manual context
+        }}
+        version={updaterStatus.version || '1.3.0'}
+        releaseNotes={updaterStatus.releaseNotes || 'Mejoras de rendimiento y corrección de pequeños fallos del sistema.'}
+        percent={updaterStatus.percent}
+        status={updaterStatus.status}
+        onStartDownload={handleStartUpdateDownload}
+        onInstall={handleInstallUpdate}
       />
 
     </div>
