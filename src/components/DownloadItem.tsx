@@ -99,6 +99,11 @@ export default function DownloadItem({ task, onPause, onResume, onRemove, onRetr
             <span className="text-[9px] text-neutral-600 dark:text-neutral-400 font-mono">
               {selectedFormat.qualityLabel} · {selectedFormat.format.toUpperCase()}
             </span>
+            {selectedFormat.type === 'video' && (
+              <span className="text-[8.5px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-200 dark:border-emerald-900/30">
+                🔊 Audio + Video
+              </span>
+            )}
           </div>
           <span className="text-[10px] font-semibold text-neutral-600 dark:text-neutral-400 shrink-0">
             {isScheduled ? 'Programado' : viewsString(status, progress, currentSpeedMbps)}

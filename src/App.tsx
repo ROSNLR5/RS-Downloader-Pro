@@ -35,7 +35,10 @@ import {
   ShieldAlert,
   Play,
   X,
-  Check
+  Check,
+  Clock,
+  AlertOctagon,
+  Volume2
 } from 'lucide-react';
 
 export default function App() {
@@ -274,22 +277,56 @@ export default function App() {
 
   // Toast banner helper
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [showDailyLimitModal, setShowDailyLimitModal] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Daily downloads tracker (20 max)
+  // Format local date key (YYYY-MM-DD)
+  const getTodayDateKey = (): string => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Calculates exact remaining time until 00:00:00 midnight
+  const getTimeUntilMidnight = (): string => {
+    const now = new Date();
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const diffMs = midnight.getTime() - now.getTime();
+    const hours = Math.floor(diffMs / (1000 * 60 * 60));
+    const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    return `${hours}h ${mins}m`;
+  };
+
+  // Daily downloads tracker (20 max per calendar day, resets at midnight)
   const getDailyDownloadsCount = (): number => {
     try {
-      const stored = localStorage.getItem('rs_downloader_usage_timestamps');
-      if (!stored) return 0;
-      const parsed = JSON.parse(stored);
-      const limitPeriod = 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      const filtered = parsed.filter((t: number) => now - t < limitPeriod);
-      return filtered.length;
+      const todayKey = getTodayDateKey();
+      const stored = localStorage.getItem('rs_downloader_daily_quota');
+      if (!stored) {
+        // Backwards compatibility migration from old rolling timestamps if today matches
+        const legacy = localStorage.getItem('rs_downloader_usage_timestamps');
+        if (legacy) {
+          const parsed = JSON.parse(legacy);
+          const limitPeriod = 24 * 60 * 60 * 1000;
+          const now = Date.now();
+          const filtered = parsed.filter((t: number) => now - t < limitPeriod);
+          const count = Math.min(filtered.length, 20);
+          localStorage.setItem('rs_downloader_daily_quota', JSON.stringify({ date: todayKey, count }));
+          return count;
+        }
+        return 0;
+      }
+      const data = JSON.parse(stored);
+      if (data.date !== todayKey) {
+        // Automatically renew 20 downloads for the new calendar day!
+        localStorage.setItem('rs_downloader_daily_quota', JSON.stringify({ date: todayKey, count: 0 }));
+        return 0;
+      }
+      return data.count || 0;
     } catch {
       return 0;
     }
@@ -297,18 +334,13 @@ export default function App() {
 
   const registerNewDownload = (): boolean => {
     try {
-      const stored = localStorage.getItem('rs_downloader_usage_timestamps');
-      const parsed = stored ? JSON.parse(stored) : [];
-      const limitPeriod = 24 * 60 * 60 * 1000;
-      const now = Date.now();
-      const filtered = parsed.filter((t: number) => now - t < limitPeriod);
-      
-      if (filtered.length >= 20) {
+      const todayKey = getTodayDateKey();
+      const current = getDailyDownloadsCount();
+      if (current >= 20) {
         return false;
       }
-      
-      const next = [...filtered, now];
-      localStorage.setItem('rs_downloader_usage_timestamps', JSON.stringify(next));
+      const nextCount = current + 1;
+      localStorage.setItem('rs_downloader_daily_quota', JSON.stringify({ date: todayKey, count: nextCount }));
       return true;
     } catch {
       return true;
@@ -478,7 +510,8 @@ export default function App() {
 
     const currentToday = getDailyDownloadsCount();
     if (currentToday >= 20) {
-      setErrorMessage('Límite diario alcanzado: RS Downloader Pro permite un máximo de 20 descargas de videos por día únicamente.');
+      setErrorMessage(`Límite diario alcanzado: Se ha completado la cuota de 20 descargas de hoy. Se renovará a las 00:00 (en ${getTimeUntilMidnight()}).`);
+      setShowDailyLimitModal(true);
       return;
     }
 
@@ -506,34 +539,44 @@ export default function App() {
       
       if (smartMode.isEnabled) {
         // Enforce Smart Mode logic: Pick matching preselected formats instantly
-        let chosenFormat = metadata.formats[0]; // fallback
-        
         const isAudioPref = ['mp3', 'm4a'].includes(smartMode.format);
-        let targetQualityValue = '';
-        if (isAudioPref) {
-           if (smartMode.quality === '320k') targetQualityValue = '320k';
-           if (smartMode.quality === '192k') targetQualityValue = '192k';
-           if (smartMode.quality === 'low') targetQualityValue = '128k';
-        } else {
-           if (smartMode.quality === 'high') targetQualityValue = '1080p';
-           if (smartMode.quality === 'medium') targetQualityValue = '720p';
-           if (smartMode.quality === 'low') targetQualityValue = '480p';
-        }
-
         const formatMatches = metadata.formats.filter(f => {
           if (isAudioPref) return f.type === 'audio' && f.format === smartMode.format;
           return f.type === 'video' && f.format === smartMode.format;
         });
 
-        let selected = formatMatches.find(f => f.qualityValue === targetQualityValue);
-        if (!selected && targetQualityValue) {
-           selected = metadata.formats.find(f => f.type === (isAudioPref ? 'audio' : 'video') && f.qualityValue === targetQualityValue);
-        }
-        if (!selected && formatMatches.length > 0) {
-           selected = formatMatches[0];
-        }
-        if (selected) {
-           chosenFormat = selected;
+        const pool = formatMatches.length > 0 ? formatMatches : metadata.formats.filter(f => f.type === (isAudioPref ? 'audio' : 'video'));
+
+        let chosenFormat: AvailableFormat;
+
+        if (isAudioPref) {
+          if (smartMode.quality === '320k') {
+            chosenFormat = pool.find(f => f.qualityValue === '320k') || pool[0];
+          } else if (smartMode.quality === '192k') {
+            chosenFormat = pool.find(f => f.qualityValue === '192k') || pool[0];
+          } else {
+            chosenFormat = pool.find(f => f.isRecommended) || pool[0];
+          }
+        } else {
+          // Video quality preferences:
+          if (smartMode.quality === '1080p' || smartMode.quality === 'high') {
+            // Anchor at 1080p recommended, or highest if no 1080p
+            chosenFormat = pool.find(f => f.qualityValue === '1080p') || 
+                           pool.find(f => f.isRecommended) || 
+                           pool[0];
+          } else if (smartMode.quality === 'best') {
+            // Highest available quality (e.g. 4K, 2K, or 1080p)
+            chosenFormat = pool[0];
+          } else if (smartMode.quality === 'medium') {
+            chosenFormat = pool.find(f => f.qualityValue === '720p') || pool[0];
+          } else if (smartMode.quality === 'low') {
+            chosenFormat = pool.find(f => f.qualityValue === '480p') || pool[pool.length - 1];
+          } else {
+            // Default: pick recommended (1080p or highest available)
+            chosenFormat = pool.find(f => f.isRecommended) || 
+                           pool.find(f => f.qualityValue === '1080p') || 
+                           pool[0];
+          }
         }
 
         const opts: any = {};
@@ -579,7 +622,8 @@ export default function App() {
   ) => {
     const success = registerNewDownload();
     if (!success) {
-      setErrorMessage('Límite diario alcanzado: RS Downloader Pro permite un máximo de 20 descargas de videos por día únicamente.');
+      setErrorMessage(`Límite diario alcanzado: Has alcanzado el límite de 20 descargas de hoy. Se renovará a las 00:00 (en ${getTimeUntilMidnight()}).`);
+      setShowDailyLimitModal(true);
       return;
     }
 
@@ -800,36 +844,86 @@ export default function App() {
             )}
           </form>
 
-          {/* Daily limit gauge tracking progress (compact layout) */}
-          <div className="flex sm:inline-flex items-center justify-between gap-6 text-xs bg-white dark:bg-neutral-950/45 px-4 py-2 rounded-xl border border-neutral-300 dark:border-neutral-850 w-full sm:w-auto max-w-md">
-            <div className="flex items-center gap-2 text-neutral-700 dark:text-neutral-300 whitespace-nowrap">
-              <CheckCircle className="w-3.5 h-3.5 text-lime-700 dark:text-lime-400 shrink-0" />
-              <span className="font-semibold">Límite diario:</span>
-              <span className={`font-mono font-black ${getDailyDownloadsCount() >= 18 ? 'text-red-700 dark:text-red-400' : 'text-lime-700 dark:text-lime-400'}`}>
-                {getDailyDownloadsCount()} de 20
-              </span>
-              <span className="text-neutral-500 dark:text-neutral-450">descargas hoy</span>
+          {/* Daily limit gauge tracking progress with calendar day & midnight renewal */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs bg-white dark:bg-neutral-950/60 p-3 rounded-xl border border-neutral-300 dark:border-neutral-800 w-full shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className={`p-1.5 rounded-lg shrink-0 ${
+                getDailyDownloadsCount() >= 20 
+                  ? 'bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-400 border border-red-300 dark:border-red-800/40' 
+                  : getDailyDownloadsCount() >= 17 
+                    ? 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800/40' 
+                    : 'bg-lime-100 dark:bg-lime-950/50 text-lime-700 dark:text-lime-400 border border-lime-300 dark:border-lime-800/40'
+              }`}>
+                {getDailyDownloadsCount() >= 20 ? (
+                  <AlertOctagon className="w-4 h-4" />
+                ) : (
+                  <CheckCircle className="w-4 h-4" />
+                )}
+              </div>
+              
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-neutral-800 dark:text-neutral-200">Cuota Diaria de Descargas:</span>
+                  <span className={`font-mono font-black text-xs ${
+                    getDailyDownloadsCount() >= 20 ? 'text-red-650 dark:text-red-400' : 'text-lime-700 dark:text-lime-400'
+                  }`}>
+                    {getDailyDownloadsCount()} de 20
+                  </span>
+                  <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                    {getDailyDownloadsCount() >= 20 ? '(Límite alcanzado hoy)' : 'descargas usadas'}
+                  </span>
+                </div>
+
+                {/* Visual Gauge Bar */}
+                <div className="w-48 max-w-full bg-neutral-200 dark:bg-neutral-800 h-1.5 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full transition-all duration-500 rounded-full ${
+                      getDailyDownloadsCount() >= 20 
+                        ? 'bg-red-500' 
+                        : getDailyDownloadsCount() >= 17 
+                          ? 'bg-amber-500' 
+                          : 'bg-gradient-to-r from-lime-500 to-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (getDailyDownloadsCount() / 20) * 100)}%` }}
+                  />
+                </div>
+              </div>
             </div>
-            <span className="text-[10px] text-neutral-500 dark:text-neutral-450 font-medium whitespace-nowrap bg-neutral-100 dark:bg-neutral-900 px-2.5 py-0.5 rounded-lg border border-neutral-800/60 font-mono">(Reinicio en 24h)</span>
+
+            <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+              <span className="text-[10.5px] text-neutral-600 dark:text-neutral-400 font-mono flex items-center gap-1.5 bg-neutral-100 dark:bg-neutral-900 px-3 py-1.5 rounded-lg border border-neutral-300 dark:border-neutral-800">
+                <Clock className="w-3.5 h-3.5 text-lime-600 dark:text-lime-400" />
+                <span>Reinicio a las 00:00 (en {getTimeUntilMidnight()})</span>
+              </span>
+              
+              {getDailyDownloadsCount() >= 20 && (
+                <button
+                  type="button"
+                  onClick={() => setShowDailyLimitModal(true)}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-400 rounded-lg border border-red-300 dark:border-red-800 cursor-pointer hover:bg-red-200"
+                >
+                  Detalles
+                </button>
+              )}
+            </div>
           </div>
  
-          {/* Supported sources (simple text labels instead of active buttons) */}
-          <div className="space-y-1.5 mt-1" style={{ width: "751px" }}>
-            <span className="font-semibold text-[10.5px] uppercase text-neutral-600 dark:text-neutral-400 tracking-wider block" style={{ width: "180px" }}>
-              Sitios web compatibles:
+          {/* Supported sources (clean responsive tags) */}
+          <div className="space-y-1.5 mt-2 w-full">
+            <span className="font-semibold text-[10.5px] uppercase text-neutral-600 dark:text-neutral-400 tracking-wider block">
+              Plataformas y Redes Compatibles (con audio asegurado):
             </span>
-            <div className="flex flex-wrap gap-1.5" style={{ width: "750px" }}>
+            <div className="flex flex-wrap gap-1.5">
               {[
-                { name: 'YouTube', color: 'border-red-500/20 text-red-700 dark:text-red-400/80 bg-red-100 dark:bg-red-950/10' },
-                { name: 'TikTok', color: 'border-zinc-500/20 text-neutral-700 dark:text-neutral-300 bg-neutral-100/40 dark:bg-neutral-900/40' },
-                { name: 'Instagram', color: 'border-pink-500/20 text-pink-400/80 bg-pink-950/10' },
-                { name: 'Facebook', color: 'border-blue-500/20 text-blue-700 dark:text-blue-400/80 bg-blue-100 dark:bg-blue-950/10' },
-                { name: 'Twitter / X', color: 'border-neutral-500/20 text-neutral-800/80 dark:text-white/80 bg-neutral-100/20 dark:bg-neutral-900/20' },
-                { name: 'Twitch', color: 'border-purple-500/20 text-purple-400/80 bg-purple-950/10' },
-                { name: 'Vimeo', color: 'border-sky-500/20 text-sky-700 dark:text-sky-400 bg-sky-100 dark:bg-sky-950/10' },
-                { name: 'SoundCloud', color: 'border-orange-500/20 text-orange-700 dark:text-orange-400 bg-orange-100 dark:bg-orange-950/10' },
-                { name: 'DailyMotion', color: 'border-blue-500/10 text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/10' },
-                { name: 'Flickr', color: 'border-pink-600/20 text-pink-500/80 bg-pink-950/10' }
+                { name: 'YouTube (8K/4K/HD)', color: 'border-red-500/20 text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-950/20' },
+                { name: 'TikTok', color: 'border-zinc-500/20 text-neutral-700 dark:text-neutral-300 bg-neutral-100/50 dark:bg-neutral-900/50' },
+                { name: 'Instagram Reels', color: 'border-pink-500/20 text-pink-700 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/20' },
+                { name: 'Facebook Video', color: 'border-blue-500/20 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/20' },
+                { name: 'Twitter / X', color: 'border-neutral-500/20 text-neutral-800 dark:text-white bg-neutral-100/40 dark:bg-neutral-900/40' },
+                { name: 'Twitch Clips', color: 'border-purple-500/20 text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/20' },
+                { name: 'Vimeo', color: 'border-sky-500/20 text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/20' },
+                { name: 'SoundCloud', color: 'border-orange-500/20 text-orange-700 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/20' },
+                { name: 'DailyMotion', color: 'border-blue-500/20 text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/20' },
               ].map((site) => (
                 <span
                   key={site.name}
@@ -1001,6 +1095,51 @@ export default function App() {
             <p className="text-[10px] text-neutral-450 dark:text-neutral-500 border-t border-neutral-150 dark:border-neutral-850 pt-4 font-sans uppercase tracking-widest">
               Por favor, no cierres la aplicación.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Daily Limit Reached Modal Popup */}
+      {showDailyLimitModal && (
+        <div id="daily-limit-overlay" className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 animate-fade-in font-sans">
+          <div className="w-full max-w-md bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 rounded-3xl shadow-2xl overflow-hidden p-6 text-center space-y-5 animate-scale-up">
+            
+            <div className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800 text-red-650 dark:text-red-400 mx-auto flex items-center justify-center shadow-inner">
+              <AlertOctagon className="w-8 h-8 stroke-[2.2]" />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-650 dark:text-red-400 bg-red-50 dark:bg-red-950/40 px-2.5 py-0.5 rounded-full border border-red-200 dark:border-red-900">
+                Límite de Uso Diario
+              </span>
+              <h3 className="text-lg font-black text-neutral-900 dark:text-white">
+                Cuota Máxima Alcanzada (20/20)
+              </h3>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed px-2">
+                RS Downloader Pro mantiene una política de estabilidad de red con un máximo de <strong>20 descargas de videos por día</strong>.
+              </p>
+            </div>
+
+            {/* Midnight countdown block */}
+            <div className="p-3.5 bg-neutral-100 dark:bg-neutral-950/60 rounded-2xl border border-neutral-200 dark:border-neutral-800 space-y-1">
+              <span className="text-[10px] text-neutral-500 uppercase tracking-wider font-bold block">
+                Tiempo Restante para Renovación
+              </span>
+              <div className="flex items-center justify-center gap-2 text-lime-700 dark:text-lime-400 font-mono font-black text-sm">
+                <Clock className="w-4 h-4" />
+                <span>Renovación en {getTimeUntilMidnight()} (a las 00:00:00)</span>
+              </div>
+              <p className="text-[9.5px] text-neutral-500 leading-tight pt-1">
+                A medianoche, tus 20 descargas se renovarán automáticamente para una nueva jornada.
+              </p>
+            </div>
+
+            <button
+              onClick={() => setShowDailyLimitModal(false)}
+              className="w-full py-2.5 bg-neutral-900 hover:bg-neutral-800 dark:bg-neutral-100 dark:hover:bg-neutral-200 text-white dark:text-neutral-900 font-bold text-xs rounded-xl shadow-md transition-all cursor-pointer"
+            >
+              Entendido
+            </button>
           </div>
         </div>
       )}

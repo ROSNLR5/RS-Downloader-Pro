@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Video, Music, Check, Download } from 'lucide-react';
+import { X, Video, Music, Check, Download, Volume2, Sparkles, CheckCircle2 } from 'lucide-react';
 import { VideoMetadata, AvailableFormat } from '../types';
 
 interface FormatSelectorModalProps {
@@ -45,10 +45,21 @@ export default function FormatSelectorModal({
 
   useEffect(() => {
     if (metadata) {
-      setStep('type');
-      if (metadata.formats.length > 0) {
+      setStep('format');
+      setMediaType('video');
+      
+      const videoFormats = metadata.formats.filter(f => f.type === 'video');
+      const recommendedVideo = 
+        videoFormats.find(f => f.isRecommended) || 
+        videoFormats.find(f => f.qualityValue === '1080p') || 
+        videoFormats[0];
+
+      if (recommendedVideo) {
+        setSelectedFormatId(recommendedVideo.id);
+      } else if (metadata.formats.length > 0) {
         setSelectedFormatId(metadata.formats[0].id);
       }
+
       setTrimStart('00:00');
       setTrimEnd(metadata.durationString || '01:00');
       setId3Title(metadata.title);
@@ -65,8 +76,22 @@ export default function FormatSelectorModal({
 
   if (!metadata) return null;
 
+  const handleSelectMediaType = (type: 'video' | 'audio') => {
+    setMediaType(type);
+    const filtered = metadata.formats.filter(f => f.type === type);
+    if (type === 'video') {
+      const rec = filtered.find(f => f.isRecommended) || filtered.find(f => f.qualityValue === '1080p') || filtered[0];
+      if (rec) setSelectedFormatId(rec.id);
+    } else {
+      const recAudio = filtered.find(f => f.isRecommended) || filtered.find(f => f.qualityValue === '320k') || filtered[0];
+      if (recAudio) setSelectedFormatId(recAudio.id);
+    }
+  };
+
+  const chosenFormat = metadata.formats.find(f => f.id === selectedFormatId) || metadata.formats[0];
+
   const handleConfirm = () => {
-    const chosen = metadata.formats.find(f => f.id === selectedFormatId);
+    const chosen = chosenFormat;
     if (chosen) {
       let finalMetadata = { ...metadata };
 
@@ -104,124 +129,144 @@ export default function FormatSelectorModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1 px-1.5 rounded-lg hover:bg-neutral-300 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white"
+            className="p-1 px-1.5 rounded-lg hover:bg-neutral-300 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-          {/* Body wrapper */}
-          <div className="p-6 space-y-5 max-h-[64vh] overflow-y-auto">
-            <div className="flex gap-4 items-center bg-white dark:bg-neutral-900 p-3 rounded-xl border border-neutral-300 dark:border-neutral-800">
-              <img
-                src={metadata.thumbnailUrl}
-                alt={metadata.title}
-                className="w-24 h-14 object-cover rounded-lg shrink-0 border border-neutral-300 dark:border-neutral-800"
-                referrerPolicy="no-referrer"
-              />
-              <div className="min-w-0">
-                <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-full">{metadata.title}</h4>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">{metadata.author} · {metadata.durationString}</p>
-                <p className="text-[10px] text-neutral-500 dark:text-neutral-500 font-mono uppercase mt-1">{metadata.viewsString}</p>
-              </div>
+        {/* Body wrapper */}
+        <div className="p-6 space-y-4 max-h-[66vh] overflow-y-auto">
+          {/* Metadata preview banner */}
+          <div className="flex gap-4 items-center bg-neutral-50 dark:bg-neutral-900 p-3 rounded-xl border border-neutral-300 dark:border-neutral-800">
+            <img
+              src={metadata.thumbnailUrl}
+              alt={metadata.title}
+              className="w-24 h-14 object-cover rounded-lg shrink-0 border border-neutral-300 dark:border-neutral-800"
+              referrerPolicy="no-referrer"
+            />
+            <div className="min-w-0 flex-1">
+              <h4 className="text-sm font-bold text-neutral-900 dark:text-white truncate max-w-full">{metadata.title}</h4>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 truncate mt-0.5">{metadata.author} · {metadata.durationString}</p>
+              <p className="text-[10px] text-neutral-500 dark:text-neutral-500 font-mono uppercase mt-1">{metadata.viewsString}</p>
+            </div>
+          </div>
+
+          {/* Media Type Tabs (Video vs Audio) */}
+          <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-100 dark:bg-neutral-850 rounded-xl border border-neutral-200 dark:border-neutral-800">
+            <button
+              type="button"
+              onClick={() => handleSelectMediaType('video')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                mediaType === 'video'
+                  ? 'bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white shadow-sm border border-neutral-300 dark:border-neutral-700'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+              }`}
+            >
+              <Video className="w-4 h-4 text-lime-600 dark:text-lime-400" />
+              <span>Video (MP4 con Audio)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectMediaType('audio')}
+              className={`py-2 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                mediaType === 'audio'
+                  ? 'bg-white dark:bg-neutral-900 text-neutral-950 dark:text-white shadow-sm border border-neutral-300 dark:border-neutral-700'
+                  : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+              }`}
+            >
+              <Music className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>Solo Audio (MP3 / M4A)</span>
+            </button>
+          </div>
+
+          {/* Formats and Quality Selector Grid */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider block">
+                {mediaType === 'video' ? 'Calidades Disponibles' : 'Formatos de Audio'}
+              </label>
+              <span className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                {mediaType === 'video' ? 'Audio y video combinados sin pérdida' : 'Extracción estéreo de alta fidelidad'}
+              </span>
             </div>
 
-            {step === 'type' ? (
-              <div className="space-y-4 pt-2">
-                <h4 className="text-center text-sm font-bold text-neutral-900 dark:text-white mb-4">¿Qué deseas descargar?</h4>
-                <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto pr-1">
+              {metadata.formats.filter(f => f.type === mediaType).map((fmt) => {
+                const isVideo = fmt.type === 'video';
+                const isSelected = selectedFormatId === fmt.id;
+                const isRecommended = !!fmt.isRecommended;
+
+                return (
                   <button
-                    onClick={() => {
-                      setMediaType('video');
-                      const videoFormats = metadata.formats.filter(f => f.type === 'video');
-                      if (videoFormats.length > 0) setSelectedFormatId(videoFormats[0].id);
-                      setStep('format');
-                    }}
-                    className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:border-lime-500/50 rounded-2xl transition-all gap-3 overflow-hidden relative group"
+                    key={fmt.id}
+                    type="button"
+                    onClick={() => setSelectedFormatId(fmt.id)}
+                    className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all outline-none cursor-pointer relative ${
+                      isSelected
+                        ? 'bg-lime-50/80 dark:bg-lime-950/40 border-lime-500 text-neutral-900 dark:text-white shadow-md ring-2 ring-lime-500/40'
+                        : isRecommended
+                          ? 'bg-white dark:bg-neutral-900 border-lime-400/50 dark:border-lime-700/50 text-neutral-800 dark:text-neutral-200 hover:border-lime-500'
+                          : 'bg-white dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-850 hover:text-neutral-900 dark:hover:text-white'
+                    }`}
                   >
-                    <div className="absolute inset-0 bg-gradient-to-t from-lime-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="w-14 h-14 bg-white dark:bg-zinc-950 rounded-full flex items-center justify-center border border-neutral-300 dark:border-neutral-800 group-hover:border-lime-500/30 group-hover:text-lime-700 dark:hover:text-lime-400 transition-colors z-10 text-neutral-600 dark:text-neutral-400">
-                      <Video className="w-6 h-6" />
+                    <div className={`p-2 rounded-lg mt-0.5 shrink-0 ${
+                      isSelected 
+                        ? 'bg-lime-500 text-neutral-950' 
+                        : isRecommended
+                          ? 'bg-lime-100 dark:bg-lime-950 text-lime-700 dark:text-lime-400 border border-lime-400/40'
+                          : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                    }`}>
+                      {isVideo ? <Video className="w-4 h-4" /> : <Music className="w-4 h-4" />}
                     </div>
-                    <div className="text-center z-10">
-                      <span className="font-extrabold text-sm text-neutral-900 dark:text-white block">Video</span>
-                      <span className="text-[10px] text-neutral-600 dark:text-neutral-400">MP4, MKV (con audio)</span>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-black block truncate font-sans">
+                          {fmt.qualityLabel}
+                        </span>
+                        {isRecommended && (
+                          <span className="px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider bg-lime-500/20 text-lime-700 dark:text-lime-300 border border-lime-500/40">
+                            ★ Recomendada
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-neutral-600 dark:text-neutral-400 font-mono">
+                        <span className="font-bold uppercase px-1.5 py-0.5 bg-neutral-200 dark:bg-neutral-800 rounded text-[9px]">
+                          {fmt.format}
+                        </span>
+                        <span className="font-semibold">~{fmt.estimatedSizeMb} MB</span>
+                      </div>
+
+                      {isVideo && (
+                        <div className="flex items-center gap-1 mt-1 text-[9.5px] font-medium text-emerald-600 dark:text-emerald-400">
+                          <Volume2 className="w-3 h-3 shrink-0" />
+                          <span>Audio estéreo sincronizado</span>
+                        </div>
+                      )}
+
+                      {fmt.formatNote && (
+                        <span className="text-[9px] text-neutral-500 dark:text-neutral-450 block truncate mt-0.5">
+                          {fmt.formatNote}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="self-center shrink-0 ml-1">
+                      {isSelected ? (
+                        <div className="w-4 h-4 rounded-full bg-lime-500 text-neutral-950 flex items-center justify-center">
+                          <Check className="w-3 h-3 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div className="w-4 h-4 rounded-full border border-neutral-400 dark:border-neutral-700"></div>
+                      )}
                     </div>
                   </button>
-                  <button
-                    onClick={() => {
-                      setMediaType('audio');
-                      const audioFormats = metadata.formats.filter(f => f.type === 'audio');
-                      if (audioFormats.length > 0) setSelectedFormatId(audioFormats[0].id);
-                      setStep('format');
-                    }}
-                    className="flex flex-col items-center justify-center p-6 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:border-lime-500/50 rounded-2xl transition-all gap-3 overflow-hidden relative group"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-t from-lime-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                    <div className="w-14 h-14 bg-white dark:bg-zinc-950 rounded-full flex items-center justify-center border border-neutral-300 dark:border-neutral-800 group-hover:border-lime-500/30 group-hover:text-lime-700 dark:hover:text-lime-400 transition-colors z-10 text-neutral-600 dark:text-neutral-400">
-                      <Music className="w-6 h-6" />
-                    </div>
-                    <div className="text-center z-10">
-                      <span className="font-extrabold text-sm text-neutral-900 dark:text-white block">Solo Audio</span>
-                      <span className="text-[10px] text-neutral-600 dark:text-neutral-400">MP3, M4A HQ</span>
-                    </div>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4 animate-fade-in">
-                {/* Formats checklists */}
-                <div>
-                  <div className="flex items-center justify-between mb-2.5">
-                    <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider block">
-                      Opciones de {mediaType === 'video' ? 'Video' : 'Audio'}
-                    </label>
-                    <button
-                      onClick={() => setStep('type')}
-                      className="text-[10px] text-lime-500 hover:text-lime-700 dark:hover:text-lime-400 font-bold underline underline-offset-2"
-                    >
-                      Volver
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                    
-                    {metadata.formats.filter(f => f.type === mediaType).map((fmt) => {
-                      const isVideo = fmt.type === 'video';
-                      return (
-                        <button
-                          key={fmt.id}
-                          type="button"
-                          onClick={() => setSelectedFormatId(fmt.id)}
-                          className={`p-3 rounded-xl border text-left flex items-start gap-2.5 transition-all outline-none ${
-                            selectedFormatId === fmt.id
-                              ? 'bg-lime-100 dark:bg-lime-950/40 border-lime-500 text-neutral-900 dark:text-white shadow-md'
-                              : 'bg-white dark:bg-neutral-900 border-neutral-300 dark:border-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
-                          }`}
-                        >
-                          <div className={`p-1.5 rounded-lg mt-0.5 ${
-                            selectedFormatId === fmt.id ? 'bg-lime-100 dark:bg-lime-950/50 text-lime-700 dark:text-lime-400' : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
-                          }`}>
-                            {isVideo ? <Video className="w-4 h-4" /> : <Music className="w-4 h-4" />}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="text-xs font-bold block truncate capitalize font-sans">
-                              {fmt.qualityLabel}
-                            </span>
-                            <span className="text-[10px] text-neutral-600 dark:text-neutral-400 font-mono">
-                              {fmt.format.toUpperCase()} · ~{fmt.estimatedSizeMb} MB
-                            </span>
-                          </div>
-                          {selectedFormatId === fmt.id && (
-                            <div className="w-4 h-4 rounded-full bg-lime-500 text-neutral-950 flex items-center justify-center self-center shrink-0">
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                    
-                  </div>
-                </div>
+                );
+              })}
+            </div>
+          </div>
 
                 {/* ADVANCED PRO TOOLS PANEL */}
                 <div className="border-t border-neutral-300 dark:border-neutral-800 pt-4 space-y-4">
@@ -411,8 +456,6 @@ export default function FormatSelectorModal({
 
                   </div>
                 </div>
-              </div>
-            )}
 
           </div>
 
@@ -424,16 +467,16 @@ export default function FormatSelectorModal({
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="px-4 py-2 border border-neutral-300 dark:border-neutral-800 rounded-lg text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+              className="px-4 py-2 border border-neutral-300 dark:border-neutral-800 rounded-lg text-xs font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               onClick={handleConfirm}
-              className="px-5 py-2 bg-gradient-to-r from-lime-500 to-emerald-500 text-neutral-950 font-extrabold text-xs rounded-lg shadow-lg hover:from-lime-400 hover:to-emerald-400 transition-all flex items-center gap-1.5"
+              className="px-5 py-2 bg-gradient-to-r from-lime-500 to-emerald-500 text-neutral-950 font-extrabold text-xs rounded-lg shadow-lg hover:from-lime-400 hover:to-emerald-400 transition-all flex items-center gap-1.5 cursor-pointer"
             >
               <Download className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Empezar Descarga</span>
+              <span>Descargar {chosenFormat?.qualityValue?.toUpperCase() || (mediaType === 'video' ? 'Video' : 'Audio')} ({chosenFormat?.format?.toUpperCase() || 'MP4'})</span>
             </button>
           </div>
         </div>

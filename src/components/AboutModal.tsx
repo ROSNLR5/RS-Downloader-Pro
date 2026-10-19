@@ -170,15 +170,15 @@ export default function AboutModal({ isOpen, onClose, onManualUpdateCheck }: Abo
                 <div className="border-t border-neutral-200 dark:border-neutral-800/80 pt-3.5 space-y-2.5">
                   <div className="flex items-center gap-2 text-xs">
                     <div className="w-5 h-5 rounded-md bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center text-lime-500 font-mono text-[10px] font-bold">1</div>
-                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Algoritmo multihilo premium</span>
+                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Fusión inteligente de audio AAC/MP3 con FFmpeg</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <div className="w-5 h-5 rounded-md bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center text-lime-500 font-mono text-[10px] font-bold">2</div>
-                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Alerón de renderizado adaptativo</span>
+                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Motor de extracción multihilo sin límites de velocidad</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <div className="w-5 h-5 rounded-md bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center text-lime-500 font-mono text-[10px] font-bold">3</div>
-                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Persistencia inteligente de descargas</span>
+                    <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-300">Control de cuota diaria y diagnóstico en vivo</span>
                   </div>
                 </div>
 

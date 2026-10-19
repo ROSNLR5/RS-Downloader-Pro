@@ -54,7 +54,7 @@ export default function WindowsTitleBar({
                 ? 'bg-lime-100 dark:bg-lime-950/50 border border-lime-500 text-lime-700 dark:text-lime-400 shadow-[0_0_10px_rgba(132,204,22,0.15)]'
                 : 'bg-neutral-100 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-white'
             }`}
-            title={`Modo Inteligente: ${smartMode.isEnabled ? 'ON' : 'OFF'}`}
+            title={`Ajustes & Diagnóstico FFmpeg (${smartMode.isEnabled ? 'Modo Inteligente ON' : 'Modo Inteligente OFF'})`}
           >
             <Sliders className="w-3 h-3 animate-spin-slow" />
           </button>

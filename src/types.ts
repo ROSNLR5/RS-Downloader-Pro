@@ -27,6 +27,30 @@ export interface AvailableFormat {
   qualityLabel: string; // e.g., "1080p (Full HD)", "320 kbps"
   qualityValue: string; // e.g., "2160p", "1080p", "320k"
   estimatedSizeMb: number;
+  hasAudio?: boolean; // explicitly flags that video includes audio
+  formatNote?: string;
+  fps?: number;
+  isRecommended?: boolean;
+  resolutionHeight?: number;
+}
+
+export interface DependencyStatus {
+  name: string;
+  available: boolean;
+  path: string;
+  version: string | null;
+  status: 'ok' | 'missing' | 'warning';
+  message: string;
+}
+
+export interface SystemDiagnostics {
+  ffmpeg: DependencyStatus;
+  ytdlp: DependencyStatus;
+  platform: string;
+  arch: string;
+  nodeVersion: string;
+  isFfmpegMergingSupported: boolean;
+  checkedAt: number;
 }
 
 export interface DownloadTask {
@@ -53,7 +77,7 @@ export interface DownloadTask {
 export interface SmartModeSettings {
   isEnabled: boolean;
   format: 'mp4' | 'mkv' | 'mp3' | 'm4a';
-  quality: 'best' | 'high' | 'medium' | 'low' | '320k' | '192k';
+  quality: 'best' | '1080p' | 'high' | 'medium' | 'low' | '320k' | '192k';
   destFolder: string; // Simulator folder
   speedLimitKbps: number; // 0 for unlimited, customizable
 }
