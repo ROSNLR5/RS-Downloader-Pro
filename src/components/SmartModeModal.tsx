@@ -19,7 +19,12 @@ import {
   AlertTriangle, 
   Terminal, 
   Volume2, 
-  FolderOpen
+  FolderOpen,
+  ShieldCheck,
+  Upload,
+  Trash2,
+  FileText,
+  HelpCircle
 } from 'lucide-react';
 
 interface SmartModeModalProps {
@@ -30,7 +35,7 @@ interface SmartModeModalProps {
 }
 
 export default function SmartModeModal({ isOpen, onClose, settings, onChange }: SmartModeModalProps) {
-  const [activeTab, setActiveTab] = useState<'smart' | 'diagnostic'>('smart');
+  const [activeTab, setActiveTab] = useState<'smart' | 'diagnostic' | 'cookies'>('smart');
   
   // Diagnostics state
   const [diagnostics, setDiagnostics] = useState<SystemDiagnostics | null>(null);
@@ -38,11 +43,76 @@ export default function SmartModeModal({ isOpen, onClose, settings, onChange }: 
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Cookies Anti-bot state
+  const [cookieInfo, setCookieInfo] = useState<{ hasCookies: boolean; size: number; message: string } | null>(null);
+  const [cookieText, setCookieText] = useState('');
+  const [cookieStatusMsg, setCookieStatusMsg] = useState<string | null>(null);
+  const [isSavingCookie, setIsSavingCookie] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       loadDiagnostics();
+      loadCookiesInfo();
     }
   }, [isOpen]);
+
+  const loadCookiesInfo = async () => {
+    try {
+      const res = await fetch('/api/cookies');
+      if (res.ok) {
+        const data = await res.json();
+        setCookieInfo(data);
+      }
+    } catch (_) {}
+  };
+
+  const handleSaveCookies = async (contentToSave: string) => {
+    if (!contentToSave.trim()) return;
+    setIsSavingCookie(true);
+    setCookieStatusMsg(null);
+    try {
+      const res = await fetch('/api/cookies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: contentToSave.trim() })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCookieStatusMsg('✓ Archivo cookies.txt guardado correctamente.');
+        setCookieText('');
+        await loadCookiesInfo();
+      } else {
+        setCookieStatusMsg('Error: ' + (data.error || 'No se pudieron guardar'));
+      }
+    } catch (e: any) {
+      setCookieStatusMsg('Error de conexión: ' + e.message);
+    } finally {
+      setIsSavingCookie(false);
+    }
+  };
+
+  const handleDeleteCookies = async () => {
+    try {
+      const res = await fetch('/api/cookies', { method: 'DELETE' });
+      if (res.ok) {
+        setCookieStatusMsg('Cookies eliminadas correctamente.');
+        await loadCookiesInfo();
+      }
+    } catch (_) {}
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        handleSaveCookies(content);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const loadDiagnostics = async () => {
     setIsLoadingDiag(true);
@@ -180,6 +250,20 @@ export default function SmartModeModal({ isOpen, onClose, settings, onChange }: 
             <span>Diagnóstico FFmpeg & yt-dlp</span>
             {diagnostics && diagnostics.ffmpeg.available && (
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            )}
+          </button>
+          <button
+            onClick={() => { setActiveTab('cookies'); loadCookiesInfo(); }}
+            className={`py-2.5 px-3 text-xs font-bold border-b-2 flex items-center gap-1.5 transition-all cursor-pointer ${
+              activeTab === 'cookies'
+                ? 'border-lime-500 text-lime-700 dark:text-lime-400 bg-lime-50/50 dark:bg-lime-950/20'
+                : 'border-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white'
+            }`}
+          >
+            <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
+            <span>Anti-Bot / Cookies</span>
+            {cookieInfo?.hasCookies && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
             )}
           </button>
         </div>
@@ -432,6 +516,109 @@ export default function SmartModeModal({ isOpen, onClose, settings, onChange }: 
                   <p className="text-[10.5px] text-neutral-600 dark:text-neutral-400 leading-snug">
                     {diagnostics?.ytdlp.message || 'Detectando presencia de yt-dlp...'}
                   </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cookies' && (
+            <div className="space-y-4 animate-fade-in">
+              {/* Anti-Bot Explanation card */}
+              <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40">
+                <div className="flex items-start gap-2.5">
+                  <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                      Bypass Anti-Bot y Restricciones de YouTube
+                    </h4>
+                    <p className="text-[11px] text-amber-800 dark:text-amber-300/90 mt-1 leading-relaxed">
+                      YouTube aplica bloqueos tipo <em>"Sign in to confirm you're not a bot"</em> cuando las peticiones provienen de servidores cloud / centros de datos.
+                    </p>
+                    <div className="mt-2 text-[11px] text-neutral-700 dark:text-neutral-300 space-y-1">
+                      <p>✨ <strong>En tu PC local:</strong> Al ejecutar el proyecto descargado en tu ordenador, tu dirección IP residencial no tiene este bloqueo.</p>
+                      <p>🍪 <strong>En la nube / videos privados:</strong> Puedes subir o pegar tus cookies de YouTube en formato Netscape (<code className="text-lime-600 dark:text-lime-400">cookies.txt</code>) para descargar cualquier video sin restricciones.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Current Cookies Status */}
+              <div className="p-3.5 rounded-xl bg-neutral-50 dark:bg-neutral-900/60 border border-neutral-300 dark:border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-lg ${cookieInfo?.hasCookies ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400' : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500'}`}>
+                    <FileText className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold text-neutral-900 dark:text-white block">
+                      {cookieInfo?.hasCookies ? 'Cookies de YouTube Activas' : 'Sin archivo cookies.txt'}
+                    </span>
+                    <span className="text-[10.5px] text-neutral-500 dark:text-neutral-400">
+                      {cookieInfo?.hasCookies
+                        ? `Archivo detectado (${(cookieInfo.size / 1024).toFixed(1)} KB). yt-dlp está autenticado.`
+                        : 'yt-dlp funcionará en modo público predeterminado.'}
+                    </span>
+                  </div>
+                </div>
+
+                {cookieInfo?.hasCookies && (
+                  <button
+                    onClick={handleDeleteCookies}
+                    className="p-1.5 px-2 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Eliminar cookies.txt"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Eliminar</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Status Message */}
+              {cookieStatusMsg && (
+                <div className="p-2.5 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-800 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-700 animate-fade-in flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                  <span>{cookieStatusMsg}</span>
+                </div>
+              )}
+
+              {/* Upload file or paste box */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">
+                    Cargar o Pegar cookies.txt
+                  </label>
+
+                  <label className="text-[11px] font-semibold text-lime-600 dark:text-lime-400 hover:underline cursor-pointer flex items-center gap-1">
+                    <Upload className="w-3 h-3" />
+                    <span>Subir archivo .txt</span>
+                    <input
+                      type="file"
+                      accept=".txt"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                    />
+                  </label>
+                </div>
+
+                <textarea
+                  value={cookieText}
+                  onChange={(e) => setCookieText(e.target.value)}
+                  placeholder={`Pega aquí el contenido de cookies.txt exportado de tu navegador (ej. con la extensión 'Get cookies.txt locally')...
+
+# Netscape HTTP Cookie File
+.youtube.com\tTRUE\t/\tTRUE\t...\tSAPISID\t...`}
+                  rows={4}
+                  className="w-full text-[11px] font-mono p-2.5 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-950 text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-lime-500 resize-none"
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => handleSaveCookies(cookieText)}
+                    disabled={!cookieText.trim() || isSavingCookie}
+                    className="px-4 py-1.5 bg-lime-500 hover:bg-lime-400 disabled:opacity-40 disabled:cursor-not-allowed text-neutral-950 font-bold text-xs rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                  >
+                    <Check className="w-3.5 h-3.5 stroke-[3px]" />
+                    <span>{isSavingCookie ? 'Guardando...' : 'Guardar Cookies'}</span>
+                  </button>
                 </div>
               </div>
             </div>

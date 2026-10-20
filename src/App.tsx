@@ -78,7 +78,7 @@ export default function App() {
     }
 
     // Direct gorgeous visual installation supervisor flow
-    const targetVer = updaterStatus.version || '1.3.0';
+    const targetVer = updaterStatus.version || '1.5.0';
     setIsInstallingUpdate(true);
     setInstallProgress(0);
     setInstallStep('Iniciando el asistente de instalación...');
@@ -141,7 +141,7 @@ export default function App() {
             ...prev,
             status: 'downloaded',
             percent: 100,
-            message: `¡Versión ${prev.version || '1.3.0'} descargada y lista para instalar!`
+            message: `¡Versión ${prev.version || '1.5.0'} descargada y lista para instalar!`
           }));
         } else {
           setUpdaterStatus(prev => ({
@@ -186,9 +186,9 @@ export default function App() {
           // Available update on first check
           setUpdaterStatus({
             status: 'available',
-            version: '1.3.0',
+            version: '1.5.0',
             releaseNotes: 'Optimización de velocidad y paralelización avanzada.\nNuevos selectores para resoluciones nativas de videos de Instagram y TikTok.\nFusión local de audio y video automatizada con ffmpeg mejorada.',
-            message: '¡Nueva versión 1.3.0 disponible!'
+            message: '¡Nueva versión 1.5.0 disponible!'
           });
           setShowUpdatePopup(true);
         } else {
@@ -479,7 +479,7 @@ export default function App() {
       const folderParam = smartMode.destFolder ? `&destFolder=${encodeURIComponent(smartMode.destFolder)}` : '';
       const appendFolderUrl = `${urlStr}${folderParam}`;
 
-      // Call the backend endpoint silently. The local backend handles downloading and saving the file!
+      // Call the backend endpoint
       const res = await fetch(appendFolderUrl);
       if (res.ok) {
         const contentType = res.headers.get('content-type');
@@ -490,13 +490,30 @@ export default function App() {
             return;
           }
         }
+        
+        // If file was streamed directly, download via memory blob
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${requestedTitle}.${extString}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+        showToast(`Descarga finalizada: ${requestedTitle}`);
+        return;
+      } else {
+        const errJson = await res.json().catch(() => null);
+        if (errJson && errJson.error === 'bot_verification') {
+          showToast('⚠️ YouTube antibot: Abre Ajustes > Cookies o corre en PC');
+          setErrorMessage('YouTube solicita confirmación antibot en servidores en la nube. Abre Ajustes > Anti-Bot / Cookies o corre RS Downloader en tu PC local.');
+          return;
+        }
       }
     } catch (e) {
-      console.warn("Direct folder save failed or wasn't handled, falling back to standard stream download.", e);
+      console.log("Download handled or cancelled:", e);
     }
-
-    // Fallback: This triggers the standard browser attachment stream if the backend direct write fails (e.g. web-only)
-    window.location.href = urlStr;
   };
 
   // Action: Paste link and Analyze URL
@@ -1050,7 +1067,7 @@ export default function App() {
           setShowUpdatePopup(false);
           setIsManualUpdateCheck(false); // reset manual context
         }}
-        version={updaterStatus.version || '1.3.0'}
+        version={updaterStatus.version || '1.5.0'}
         releaseNotes={updaterStatus.releaseNotes || 'Mejoras de rendimiento y corrección de pequeños fallos del sistema.'}
         percent={updaterStatus.percent}
         status={updaterStatus.status}
@@ -1074,7 +1091,7 @@ export default function App() {
             {/* Header info */}
             <div className="space-y-1">
               <h2 className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white">Instalando Actualización</h2>
-              <p className="text-xs text-neutral-550 dark:text-neutral-400">RS Downloader Pro se está actualizando a v{updaterStatus.version || '1.3.0'}</p>
+              <p className="text-xs text-neutral-550 dark:text-neutral-400">RS Downloader Pro se está actualizando a v{updaterStatus.version || '1.5.0'}</p>
             </div>
 
             {/* Bar & Steps message */}

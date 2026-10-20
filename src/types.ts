@@ -18,6 +18,8 @@ export interface VideoMetadata {
   source: MediaSource;
   viewsString?: string;
   formats: AvailableFormat[];
+  requiresCookies?: boolean;
+  cookieNotice?: string;
 }
 
 export interface AvailableFormat {

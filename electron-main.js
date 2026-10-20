@@ -89,7 +89,7 @@ function downloadFileWithProgress(url, dest, onProgress, onSuccess, onError) {
   });
 }
 
-function startCustomDownload(mainWindow, targetVersion = '1.3.0') {
+function startCustomDownload(mainWindow, targetVersion = '1.5.0') {
   mainWindow.webContents.send('updater-status', { 
     status: 'checking', 
     message: 'Buscando actualizador en GitHub Releases...' 

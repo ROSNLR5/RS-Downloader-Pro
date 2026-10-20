@@ -152,6 +152,17 @@ export default function FormatSelectorModal({
             </div>
           </div>
 
+          {metadata.requiresCookies && (
+            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-500 shrink-0" />
+                <span className="text-amber-800 dark:text-amber-300 text-[11px]">
+                  💡 En tu PC local la descarga funciona sin restricciones (o puedes añadir tus cookies en Ajustes).
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Media Type Tabs (Video vs Audio) */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-neutral-100 dark:bg-neutral-850 rounded-xl border border-neutral-200 dark:border-neutral-800">
             <button
